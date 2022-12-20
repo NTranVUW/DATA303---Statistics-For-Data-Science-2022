@@ -1,0 +1,177 @@
+---
+title: "DATA 303/473 Assignment 1"
+date: "Due: 17 March 2022"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(dplyr)
+library(pander)
+library(psych)
+```
+
+# Q1. (28 marks)
+
+**a. (6 marks)**
+
+```{r}
+cancer2 <- subset(read.csv("cancer_reg.csv"), select=c(incidencerate, 
+                                                      medincome, 
+                                                      povertypercent,
+                                                      studypercap,
+                                                      medianage,
+                                                      pctunemployed16_over,
+                                                      pctprivatecoverage,
+                                                      pctbachdeg25_over,
+                                                      target_deathrate))
+str(cancer2)
+```
+
+```{r}
+summary(cancer2)
+```
+
+From the summary of the data and from the graphs it's clear that `medianage` has several incorrect values that are way beyond 300 (anything past like 110 is literally impossible). Filtering out any value above 100 would bring all the values to within reasonable ranges. An argument can be made that the median should be well under 100 but 100 is a safe number, without the incorrect values - the range of median age goes from 22 to 65 instead of 22 to 624. The other variables look reasonable to someone without proper domain knowledge.   
+
+```{r}
+cancer2 <- cancer2[cancer2$medianage<=100,]
+```
+
+```{r}
+str(cancer2)
+```
+
+After filtering out the incorrect values for `medianage`, the observations drop from 3047 to 3017.
+
+**b. (4 marks)**
+
+```{r}
+cancer3 <- read.csv("cancer3.csv")
+```
+
+```{r}
+
+cancer3 %>% pairs.panels(method = "spearman", 
+                         density = TRUE, 
+                         ellipses = FALSE)
+```
+
+* All predictors apart from `incidencerate` appear to have a non-linear relationship with the response variable `target_deathrate`. A transformation of the predictors may be appropriate.
+`povertypercent`, `pctbachdeg25_over`, `pctunemployed16_over` and `medincome` might have slight linear relationships with `target_deathrate` but it's hard to tell and they'll be weak at best so transformations of those predictors may still be appropriate. 
+
+* All predictors have weak to moderate correlation with the response variable `target_deathrate`, two in particular have a very weak relationship with `target_deathrate`: `medianage` and `studypercap` so variable selection should be considered.
+
+* There's strong correlation between `medincome`, `povertypercent` and `pctprivatecoverage` suggesting there's strong multicollinearity between these predictors. Multicollinearity might also be present between `pctbachdeg25_over` and `medincome` which might be worth looking into.
+
+**c. (3 marks)**
+
+```{r}
+fit1 <- lm(target_deathrate~., data=cancer3)
+pander(summary(fit1))
+```
+
+$\hat{\sigma^2}=20.22^2=408.85$
+
+**d. (2 marks)**
+
+Two counties that differ by 1 per 100,000 in mean cancer diagnosis, with all other predictors being equal, will differ in 0.2209 per 100,000 in expected cancer mortality. 
+
+**e. (2 marks)**
+
+The intercept can reasonably be interpreted if all the predictors being zero or close to zero makes sense. In our model we see that `pctunemployed16_over` and `studypercap` are the only variables that are zero or close to zero, thus it does not make practical sense to interpret the intercept. 
+
+**f. (3 marks)**
+
+```{r}
+df <- data.frame(incidencerate=452, 
+                 medincome=23000, 
+                 povertypercent=16, 
+                 studypercap=150,
+                 medianage=40,
+                 pctunemployed16_over=8,
+                 pctprivatecoverage=70,
+                 pctbachdeg25_over=50)
+```
+
+```{r}
+pander(predict(fit1, df, interval="confidence"), caption="95% Confidence Interval")
+```
+
+```{r}
+pander(predict(fit1, df, interval="prediction"), caption="Prediction Interval")
+```
+
+The reason why the prediction interval is wider than the confidence interval is because prediction intervals have an additional component of uncertainty. Prediction intervals tries to capture all the uncertainty about all the points around the fitted line, in other words the uncertainty about individual $Y$ values. Whilst the confidence interval only tries to capture the uncertainty about the mean response variable, the uncertainty about where the true line lies.
+
+**g. (3 marks)**
+
+Prediction and confidence intervals hold when the values used in the prediction are within the ranges of the values in the dataset and when the regression assumptions - linearity, normality, equal variance and independence of errors hold. Assuming the regression assumptions hold, we see that `pctbachdeg25_over`$=50$ is not within the ranges of the `pctbachdeg25_over` in the model dataset which goes from 2.50 to 42.20 thus the intervals are not valid.
+
+**h. (3 marks)**
+
+The Global Usefulness Test tests the assertion that all regression coefficients are zero versus the assertion that at least one of the regression coefficients are non-zero.
+
+$H_0:\ \beta_1=\beta_2=...=\beta_p=0$
+
+$H_1:\ At\ least\ one\ \beta_j\neq0,\ j=1,...,p$
+
+```{r}
+summary(fit1)
+```
+
+From the test we find that the test statistic, the F-statistic is 333.1 on 8 and 3008 degrees of freedom with a p-value of < 2.2e-16. In conclusion, there's very strong evidence to reject the null hypothesis in favour of the alternative that at least one regression coefficient is not zero. Which means that at least one of the predictors is important for predicting the response variable `target_deathrate` so it would be appropriate to go on further and analyse and interpret the model of `target_deathrate` against each of the predictors assuming the regression assumptions hold.
+
+**i. (2 marks)**
+
+A logarithmic transformation is appropriate when the variable is right-skewed and the relationship between the variable and the response is non-linear and monotonic (non-curved). A polynomial transformation is appropriate when the relationship between a predictor and a response variable is non-monotonic (curved).
+
+The relationships between the predictors and the response isn't very clear. **Median age of county** could use a polynomial transformation maybe, it's slightly curved. **Median income per county** might also use a log transformation as it's not curved but also not linear. Those are the only ones I can see maybe needing transformations but ultimately they all look like noise to me. 
+
+# Q2. (12 marks)
+
+**a. (3 marks)**
+
+```{r}
+galton <- read.csv("galton.csv", stringsAsFactors=TRUE) 
+str(galton)
+```
+
+```{r}
+fit2 <- lm(height~father+mother+gender+kids+midparent, data=galton)
+summary(fit2)
+```
+
+The `NAs` in the estimates for `midparent` are due to severe multicollinearity. `Midparent` is calculated from $\frac{(father+1.08*mother)}{2}$ so `midparent` is linearly dependent on both `father` and `mother`. When there's severe multicollinearlity present it becomes impossible to interpret the effect of an individual predictor as one predictor increases, the other will also increase/decrease. In this case whenever `father` increases/decreases then `midparent` will also increase/decrease and whenever `mother` increases/decreases then `midparent` will increase/decrease. 
+
+**b. (2 marks)**
+
+When multicollinearity is present in a model, there's two ways to resolve it. Drop one of the predictors or combine the predictors together then drop both (eg. height and weight are collinear but we can combine them into BMI then drop height and weight from the model).
+Since `midparent` is collinear on both `father` and `mother` we can either drop `midparent` from the model or drop both `father` and `mother` from the model.
+
+**c. (2 marks)**
+
+The height of males is on average greater than the height of females by 5.2 inches when all other predictors are kept the same.
+
+**d. (2 marks)**
+
+```{r}
+length(unique(galton$familyID))
+```
+
+There are 197 unique family IDs in the dataset.
+
+**e. (3 marks)**
+
+* **Independence Assumption:** The independence assumption doesn't hold as there's 197 unique family IDs but 898 observations so multiple observations were picked from the same family and thus not independent.
+
+* **Linearity of errors:** The Residual vs Fitted plot doesn't show any strong evidence for non-linearity. The residuals are plotted equally around the horizontal line and there's no clear patterns so linearity assumption hoplds.
+
+* **Normality of Errors:** The QQ plots shows that all the residuals fit tightly around the straight line with very slight deviations at the tails but not enough for non-normality so the normality assumption holds.
+
+* **Equal variance of Errors:** The scale-location plot shows no signs of fanning or funnelling and all the residuals appear to have equal spread so equal variance assumption holds.
+
+* **Influence Measures and Outliers:** There are no highly influential observations in the dataset as all the cases are well within the Cook's Distance thresholds which is why the Cook's Distance lines are barely visible.
