@@ -1,0 +1,298 @@
+---
+title: "DATA 303/473 Assignment 3"
+author: "Name:Nicholas Tran, ID:300296259"
+date: "Due: 12 May 2022"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Assignment Questions
+
+## Q1 
+We use `Wage` data set which is in the library `ISLR2`.
+The `Wage` data set contains the following variables.
+```{r}
+library(ISLR2)
+#head(Wage)
+summary(Wage)
+``` 
+
+In the first part of the assignment. We are interested in `wage` in relation to `year`, `age` and `education`.
+This is a paired plot.
+
+```{r}
+pairs(data.frame(Wage$wage, Wage$year, Wage$age, Wage$education))
+```
+
+
+
+ It is known that `year` has approximately linear trend and the variable `education` is a categorical variable.
+ We use the natural spline curve fitting for the trend of `age`. For this
+  we use function `ns()` in the `splines` package and `lm()` function. 
+We fit the following models
+$$\begin{array}{ll}
+\textrm{model1:} & \textrm{waga} \sim \textrm{year} + ns(\textrm{age}, df = 1) +\textrm{education},\\
+\textrm{model2:} & \textrm{waga} \sim \textrm{year} + ns(\textrm{age}, df = 3) +\textrm{education},\\
+\textrm{model3:} & \textrm{waga} \sim \textrm{year} + ns(\textrm{age}, df = 5) +\textrm{education},\\
+\textrm{model4:} & \textrm{waga} \sim \textrm{year} + ns(\textrm{age}, df = 7) +\textrm{education},\\
+\textrm{model5:} & \textrm{waga} \sim \textrm{year} + ns(\textrm{age}, df = 9) +\textrm{education}.
+\end{array}$$
+
+
+(a) **(10 marks)** Fit the model and use `anova()` function to do the deviance test to compare the models.
+Choose the best model.
+```{r}
+library(splines)
+
+model1 <- lm(wage ~ year + ns(age, 1) + education, data = Wage)
+model2 <- lm(wage ~ year + ns(age, 3) + education, data = Wage)
+model3 <- lm(wage ~ year + ns(age, 5) + education, data = Wage)
+model4 <- lm(wage ~ year + ns(age, 7) + education, data = Wage)
+model5 <- lm(wage ~ year + ns(age, 9) + education, data = Wage)
+
+anova(model1, model2, model3, model4, model5)
+```
+
+**model 1 vs. model 2:** Significant. $p$-value is incredibly low so we pick model 2 over model 1.
+
+**model 2 vs. model 3:** Insignificant. $p$-value is high so there's insufficient evidence to choose model 3 over model 2.
+
+**model 3 vs. model 4:** Insignificant. $p$-value is high so there's insufficient evidence to choose model 4 over model 3.
+
+**model 4 vs. model 5:** Insignificant. $p$-value is high so there's insufficient evidence to choose model5 over model 4.
+
+Based on the results of the deviance tests, we pick model 2 - the model with age as a 3rd degree natural spline - as the best model.
+
+
+(b) **(5 marks)** Calculate `AIC` for each model fitted in (a). Choose the best model using the value of `AIC`.
+
+
+```{r}
+AIC(model1, model2, model3, model4, model5)
+```
+
+The model with the lowest AIC is model 2 (29885.87 AIC), the model with age as a 3rd degree natural spline - the same model chosen by the deviance test.  
+
+
+(c) **(10 marks)** Split the data set ($100\%$) into a training set ($70\%$) and a test set ($30\%$). Then fit model1--model5 on the training set, and calculate the test MSE for each model.
+Choose the best model.
+
+```{r}
+set.seed(11)
+
+train_index <- sample(nrow(Wage), nrow(Wage)*0.7)
+train = Wage[train_index,]
+test = Wage[-train_index,]
+
+model1 <- lm(wage ~ year + ns(age, 1) + education, data = train)
+model2 <- lm(wage ~ year + ns(age, 3) + education, data = train)
+model3 <- lm(wage ~ year + ns(age, 5) + education, data = train)
+model4 <- lm(wage ~ year + ns(age, 7) + education, data = train)
+model5 <- lm(wage ~ year + ns(age, 9) + education, data = train)
+
+y <- test$wage
+y_hat1 <- predict(model1, newdata = test)
+y_hat2 <- predict(model2, newdata = test)
+y_hat3 <- predict(model3, newdata = test)
+y_hat4 <- predict(model4, newdata = test)
+y_hat5 <- predict(model5, newdata = test)
+
+MSE1 <- mean((y-y_hat1)^2)
+MSE2 <- mean((y-y_hat2)^2)
+MSE3 <- mean((y-y_hat3)^2)
+MSE4 <- mean((y-y_hat4)^2)
+MSE5 <- mean((y-y_hat5)^2)
+
+c(MSE1, MSE2, MSE3, MSE4, MSE5)
+```
+   
+The model with the lowest MSE is model 5 (the model with age as a 9th degree natural  spline), however model 2, model 3, model 4 and model 5 all have really similar MSEs.
+Potentially cross-validation may be needed to achieve more accurate results.
+   
+
+
+
+
+
+
+(d) **(10 marks)**  By combining the result from (a), (b) and (c), decide the best model.
+Refit the chosen model using all of the `Wage` data set.
+Interpret the out of the `summary()` function.
+
+Even though the model with the lowest MSE is model 4, the AIC and deviance test recommends the second model and the MSE between model 2 and model 4 are close enough that model 2 seems like the better choice.
+
+
+```{r}
+model2 <- lm(wage ~ year + ns(age, 3) + education, data = Wage)
+
+summary(model2)
+```
+
+**p-values of regression coefficients: ** All predictors besides from the natural spline of degree 3 of age have incredibly low $p$-values which means that all the predictors besides from ns(age, 3)3 are significantly related to the response variable wage.   
+
+**R-squared: ** The $R^2$ value of the model is 0.2915 which means only 29.15% of the variance in wage is explained by the model. The model isn't a good predictor of wage.
+
+## Q2
+
+Here we will predict the number of applications received `Apps` using the other variables in the “College” data set.
+
+The data set contains 777 observations on the following 18 variables.
+```{r}
+# Private: A factor with levels No and Yes indicating private or public university
+# Apps: Number of applications received
+# Accept: Number of applications accepted
+# Enroll: Number of new students enrolled
+# Top10perc: Pct. new students from top 10% of H.S. class
+# Top25perc: Pct. new students from top 25% of H.S. class
+# F.Undergrad: Number of fulltime undergraduates
+# P.Undergrad: Number of parttime undergraduates
+# Outstate: Out-of-state tuition
+# Room.Board: Room and board costs
+# Books: Estimated book costs
+# Personal: Estimated personal spending
+# PhD: Pct. of faculty with Ph.D.'s
+# Terminal: Pct. of faculty with terminal degree
+# S.F.Ratio: Student/faculty ratio
+# perc.alumni: Pct. alumni who donate
+# Expend: Instructional expenditure per student
+# Grad.Rate: Graduation rate
+```
+
+
+
+```{r}
+library(ISLR)
+data(College)
+summary(College)
+```
+
+
+  (a) **(5 marks)**  (Create trainig set and test set) Split the data set ($100\%$) into a training set ($70\%$) and a test set ($30\%$).
+```{r}
+set.seed(11)
+
+train_index <- sample(nrow(College), nrow(College)*0.7)
+train = College[train_index,]
+test = College[-train_index,]
+
+dim(train)
+dim(test)
+```
+
+
+
+  (b) **(10 marks)** (LASSO) Fit a lasso model on the training set, with  \(\lambda\) chosen by cross-validation with the `1 se rule` . Report the test error obtained, along with the of non-zero coefficient estimates.
+  
+```{r}
+library(glmnet)
+y <- train$Apps
+x <- model.matrix(Apps ~., train)
+
+lasso.mod <- glmnet(x, y, alpha=1)
+grid <- 10 ^ seq(4, -2, length = 100)
+cv.out <- cv.glmnet(x, y, alpha=1, lambda = grid)
+lam1se <- cv.out$lambda.1se
+lam1se
+log(lam1se)
+```
+  
+
+
+
+* Test MSE  
+```{r}
+y.test <- test$Apps
+x.test <- model.matrix(Apps ~., test)
+
+lasso.predict <- predict(lasso.mod, s=lam1se, newx = x.test)
+MSE <- mean((lasso.predict - y.test)^2)
+MSE 
+```
+ 
+  
+* Non-zero coefficient estimates  
+```{r}
+lasso.coeff <- predict(lasso.mod, type="coefficients", s=lam1se)
+lasso.coeff
+```
+ 
+  
+
+  
+  
+
+
+
+
+(c) **(10 marks)** Do the best subset selection with `BIC` and choose the best model.
+
+```{r}
+library(leaps)
+
+regfit.full <- regsubsets(Apps ~ ., train) 
+reg.summary <- summary(regfit.full)
+which.min(reg.summary$bic)
+```
+
+```{r}
+coef(regfit.full, 8)
+```
+
+According to the results of BIC for subset selection, the best model chosen is the one with Accept, Enroll, Top10perc, Top25perc, F.undergrad, Outstate, Expend and Grad.Rate as predictors.
+
+
+
+  (d) **(10 marks)** Use all of the `College` data set,  refit the models chosen by LASSO in (b) and best subset selection in (c). Print output of  the function `summary()` for these models. Then compute 'AIC' and 'BIC'.
+Between these 2 models, which model is the better model. Give reasons why.  
+  
+  
+```{r}
+model.bic <- lm(Apps ~ Accept + Enroll + Top10perc + Top25perc + F.Undergrad + Outstate + Expend + Grad.Rate, data = College)
+
+summary(model.bic)
+```
+
+```{r}
+model.lasso <- lm(Apps ~ Accept + Top10perc + Expend, data = College)
+
+summary(model.lasso)
+```
+  
+```{r}
+AIC(model.bic, model.lasso)
+```
+
+```{r}
+BIC(model.bic, model.lasso)
+```
+
+**Regression coefficients: ** All the $p$-values for the coefficients in the model picked by BIC are all incredibly low which means that all predictors in the model have a significant relationship with the response variable. The same goes for the model chosen by LASSO.
+
+**Adjusted R-squared: ** The adjusted $R^2$ for the model chosen by BIC is 0.9254 which means that 92.54% of the variance in the response variable can be explained by the model. Compare to the model chosen by LASSO, the adjusted $R^2$ is 0.918, 91.8% which is slightly lower. From my understanding the adjusted $R^2$ already penalises for added predictors so if the model with more predictors has a better $R^2$ even with the penalty then that's the model that should be chosen which is the model chosen by BIC.
+
+**AIC and BIC: ** Both BIC and AIC chooses the model chosen by BIC (it has the lowest AIC/BIC), 
+
+```{r}
+13128.51 - 13083.79
+13105.23 - 13037.24
+```
+
+The differences in AIC/BIC between the models isn't small enough for us to disregard the results and choose the simpler model. 
+
+Based on all the criteria above it appears the best model is the model chosen by BIC, the model with Accept, Enroll, Top10perc, Top25perc, F.undergrad, Outstate, Expend and Grad.Rate as predictors. The model chosen by LASSO omits too many important predictors that contributes to the variance of the response variable.
+
+**[Total: 70 marks]**
+
+
+
+
+
+
+
+
+
+
+
