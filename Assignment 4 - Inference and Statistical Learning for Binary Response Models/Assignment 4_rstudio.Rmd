@@ -1,0 +1,347 @@
+---
+title: "DATA 303/473 Assignment 4"
+author: "Name:Nicholas Tran, ID:300296259"
+date: "Due: 2 June 2022"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Assignment Questions
+
+```{r}
+library(car)
+library(boot)
+library(MASS)
+library(dplyr)
+library(lmtest)
+library(pander)
+library(bestglm)
+library(foreach)
+library(doParallel)
+library(ResourceSelection)
+wtp <- read.csv("WTP.csv")
+```
+
+## 1. Data pre-processing
+
+**a.** 
+
+```{r}
+wtp = wtp %>% mutate(INCOME_NONRESPONSE = 
+                       case_when(is.na(TOTAL_INCOME)~1,TRUE~0))
+
+table(wtp$INCOME_NONRESPONSE)
+```
+
+**b.** 
+
+```{r}
+wtp.reduced = wtp %>% select(TOWN, 
+                             SEX, 
+                             AGE, 
+                             EDUC, 
+                             HEAD, 
+                             PAY_WATER, 
+                             ELECTRIC, 
+                             TIME_LENGTH, 
+                             INCOME_NONRESPONSE)
+head(wtp.reduced)
+```
+
+**c.**
+
+```{r}
+wtp.complete = wtp.reduced %>% filter(!(AGE == 9999 | EDUC == 9999))
+format(round((nrow(wtp.reduced)-nrow(wtp.complete))/nrow(wtp.reduced), 3), nsmall = 2)
+```
+
+A proportion of $0.084$ (8.4%) observations was removed from the original dataset to produce this final dataframe.
+
+**d.**
+
+```{r}
+str(wtp.complete)
+```
+
+Factors:
+
+  * `TOWN`
+  
+  * `SEX`
+  
+  * `EDUC`
+  
+  * `HEAD`
+  
+  * `PAY_WATER`
+  
+  * `ELECTRIC`
+
+```{r}
+wtp.complete$TOWN <- as.factor(wtp.complete$TOWN)
+wtp.complete$SEX <- as.factor(wtp.complete$SEX)
+wtp.complete$EDUC <- as.factor(wtp.complete$EDUC)
+wtp.complete$HEAD <- as.factor(wtp.complete$HEAD)
+wtp.complete$PAY_WATER <- as.factor(wtp.complete$PAY_WATER)
+wtp.complete$ELECTRIC <- as.factor(wtp.complete$ELECTRIC)
+
+str(wtp.complete)
+```
+
+## 2. Inferential analysis
+
+**a.** 
+
+```{r}
+log.model <- glm(INCOME_NONRESPONSE ~ SEX + AGE + EDUC + PAY_WATER + ELECTRIC, 
+                 family = "binomial", data = wtp.complete)
+```
+
+```{r}
+pander(vif(log.model))
+```
+
+All predictor GVIFs are well below the threshold of 10 so there's no evidence of multicolinearity between the predictor.
+
+**b.** 
+
+```{r}
+pander(summary(log.model))
+```
+
+Using the Wald test hypothesis: 
+
+$H_0:\beta_j=0$
+
+$H_1:\beta_j\neq 0$
+
+
+We have evidence that, keeping all other predictors the same, `PAY_WATER` (whether the household pays for water or not) is a statistically significant predictor of `INCOME_NONRESPONSE`. The $p$-value for `PAY_WATER` is less than the confidence interval of $\alpha=0.05$, thus there's strong evidence to suggest that predictors of `PAY_WATER` are both significantly different from 0 suggesting a significant relationship between whether the household pays for water and providing income on the survey.  
+
+We also have evidence that keeping all predictors the same, `ELECTRIC` is a significant predictor of `INCOME_NONRESPONSE`.
+
+There isn't sufficient evidence to suggest any of the other predictors have significant relationships with the response `INCOME_NONRESPONSE`.
+
+**c.**
+
+$\hat{\beta_8}\approx-0.7448\implies exp(\hat{\beta_8})\approx0.475$
+
+$\hat{\beta_9}\approx0.5834\implies exp(\hat{\beta_9})\approx1.79$
+
+```{r}
+pander(exp(confint.default(log.model, parm = c("PAY_WATER1", "ELECTRIC1"))))
+```
+
+The odds of someone providing income in the survey when their household pays for water is estimated to be 0.475 (95% CI: (0.3455, 0.6525)) that of those whose households do not pay for water. given that all other predictors are kept constant. (The odds of providing income data for households that pay for water is estimated to be 0.475 times the odds of providing income data for households that do not pay for water.)
+
+The odds of providing income on the survey for households that is connected to the electrical grid is estimated to be 1.79 (95% CI: (1.322, 2.43)) that of those whose households are not connected to the electrical grid. (The odds of providing income data for households that are connected to the electrical grid is estimated to be 1.79 times the odds of providing income data for households that are not connected to the electrical grid.)
+
+**d.**
+
+```{r}
+log.model.interactions <- glm(INCOME_NONRESPONSE ~ SEX * PAY_WATER + AGE + EDUC 
+                              + SEX * ELECTRIC, family = "binomial", data = wtp.complete)
+pander(summary(log.model.interactions))
+```
+
+Likelihood ratio test hypothesis: 
+
+For interaction between `SEX` and `PAY_WATER`
+
+$H_0:\beta_{10}=0$
+
+$H_1:\beta_{10}\neq 0$
+
+We get a $p$-value of 0.02086 which is lower than our confidence interval threshold of $\alpha=0.05$, suggesting that the interaction between `SEX` (sex of the individual) and `PAY_WATER` (whether the household pays for water) has a significant effect on `INCOME_NONRESPONSE` (whether the household provided income data).
+
+For interaction between `SEX` and `ELECTRIC`
+
+$H_0:\beta_{11}=0$
+
+$H_1:\beta_{11}\neq 0$
+
+We get a $p$-value of 0.01739 which is lower than our confidence interval threshold of $\alpha=0.05$, suggesting that the interaction between `SEX` (sex of the individual) and `ELECTRIC` (whether the household is connected to the electrical grid) has a significant effect on `INCOME_NONRESPONSE` (whether the household provided income data).
+
+**e.**
+
+Let:
+
+  * $X_1$ denote `SEX`
+  
+  * $X_2$ denote `AGE`
+  
+  * $X_3$ denote `EDUC`
+  
+  * $X_4$ denote `PAY_WATER`
+  
+  * $X_5$ denote `ELECTRIC`
+  
+  
+Equation for model without interaction terms:
+
+$log(\frac{p}{1-p})=\beta_0+\beta_1X_{11}+\beta_2X_2+\beta_3X_{31}+\beta_4X_{32}+\beta_5X_{33}+\beta_6X_{34}+\beta_7X_{35}+\beta_8X_{41}+\beta_9X_{51}$
+
+Equation for model with interaction between `SEX` and `PAY_WATER`, and `SEX` and `ELECTRIC`:
+
+$log(\frac{p}{1-p})=\beta_0+\beta_1X_{11}+\beta_2X_2+\beta_3X_{31}+\beta_4X_{32}+\beta_5X_{33}+\beta_6X_{34}+\beta_7X_{35}+\beta_8X_{41}+\beta_9X_{51}+\beta_{10}X_{11}X_{41}+\beta_{11}X_{11}X_{51}$
+
+**i)** 
+
+$H_0:\beta_{10}=\beta_{11}=0$
+
+$H_1:\beta_{10}\neq 0$ or $\beta_{11}\neq 0$
+
+```{r}
+pander(lrtest(log.model, log.model.interactions),caption = "")
+```
+
+**ii)**
+
+$G^2\approx9.809$
+
+**iii)**
+
+Asymptotic $\chi^2_{12-10}=\chi^2_2$ distribution under $H_0$
+
+**iv)**
+
+$p$-value $\approx P(\chi^2_2>9.809)\approx0.007412$
+
+**v)**
+
+The $p$-value is considerably lower than any confidence interval threshold thus $\beta_{10}$ and $\beta_{11}$ are significantly different from 0 so there's strong evidence that the model with interactions provides a better fit to the data than the model without interactions.
+
+**f.**
+
+```{r}
+pander(hoslem.test(wtp.complete$INCOME_NONRESPONSE, 
+                   log.model.interactions$fitted.values, g = 5))
+pander(hoslem.test(wtp.complete$INCOME_NONRESPONSE, 
+                   log.model.interactions$fitted.values, g = 10))
+pander(hoslem.test(wtp.complete$INCOME_NONRESPONSE, 
+                   log.model.interactions$fitted.values, g = 15))
+```
+
+The $p$-values for the Hosmer-Lemeshow tests for $g=5,10,15$ are all much greater than the confidence interval of $\alpha=0.05$ so there's evidence to suggest that the model provides a reasonable fit to the data.
+
+## 3. Statistical learning
+
+**a.**
+
+```{r}
+forward.select <- stepAIC(
+  glm(INCOME_NONRESPONSE ~ 1, family = "binomial", data =wtp.complete), 
+  scope = list(upper = ~ TOWN + SEX + AGE + EDUC + HEAD + PAY_WATER + ELECTRIC 
+               + TIME_LENGTH, lower = ~1), 
+  direction = "forward", trace = FALSE)
+
+pander(forward.select$anova)
+```
+
+
+```{r}
+backward.select <- stepAIC(
+  glm(INCOME_NONRESPONSE ~ TOWN + SEX + AGE + EDUC + HEAD + PAY_WATER + ELECTRIC 
+      + TIME_LENGTH, 
+      family = "binomial", 
+      data = wtp.complete), 
+  scope = list(upper = ~ TOWN + SEX + AGE + EDUC + HEAD + PAY_WATER + ELECTRIC 
+               + TIME_LENGTH, lower = ~1), 
+  direction = "backward", trace = FALSE)
+
+pander(backward.select$anova)
+```
+
+The optimal model given by forward selection is: `INCOME_NONRESPONSE ~ HEAD + PAY_WATER + ELECTRIC`
+
+The optimal model given by backward selection is: `INCOME_NONRESPONSE ~ HEAD + PAY_WATER + ELECTRIC`
+
+The models given by the forward selection technique and the model given by the backward selection technique is the same model the model with only `HEAD`, `PAY_WATER` and `ELECTRIC` as predictors.
+
+The two techniques can often yield different models due to the differences in algorithms. In forward selection we start with the null model (the model with no predictors) and continue adding predictors until a stopping criteria is reached, backward selection on the other hand starts with the full model (the model with all predictors) and start removing predictors until the stopping criteria is reached. It's possible (and usual) for the algorithms to stop at different points yielding different models.
+
+**b.**
+
+```{r}
+predictors.for.bestglm <- data.frame(TOWN = wtp.complete$TOWN,
+                                     SEX = wtp.complete$SEX, 
+                                     AGE = wtp.complete$AGE, 
+                                     EDUC = wtp.complete$EDUC,
+                                     HEAD = wtp.complete$HEAD,
+                                     PAY_WATER = wtp.complete$PAY_WATER, 
+                                     ELECTRIC = wtp.complete$ELECTRIC, 
+                                     TIME_LENGTH = wtp.complete$TIME_LENGTH, 
+                                     y = wtp.complete$INCOME_NONRESPONSE)
+```
+
+```{r}
+best.logistic.AIC <- bestglm(Xy = predictors.for.bestglm, family = binomial, IC = "AIC", 
+                             method = "exhaustive")
+pander(best.logistic.AIC$BestModels)
+```
+
+```{r}
+best.logistic.BIC <- bestglm(Xy = predictors.for.bestglm, family = binomial, IC = "BIC", 
+                             method = "exhaustive")
+pander(best.logistic.BIC$BestModels)
+```
+
+The optimal model given by AIC is: `INCOME_NONRESPONSE ~ HEAD + PAY_WATER + ELECTRIC` with an AIC of 1328
+
+The optimal model given by BIC is: `INCOME_NONRESPONSE ~ HEAD + PAY_WATER + ELECTRIC` with a BIC of 1339
+
+Both models given by AIC and BIC selection criteria are the same.
+
+AIC and BIC may give different models due to how they penalise complexity. BIC penalises models with more predictors compared to AIC. So BIC and AIC may select different optimal models if adding a predictor yields marginal results.
+
+**c.**
+
+```{r}
+area.under.curve <- function(r, p = 0){
+  require(ROCR)
+  pred <- prediction(p, r)
+  auc <- performance(pred, measure = "auc")
+  auc@y.values[[1]]
+}
+```
+
+```{r}
+nrep <- 50
+
+nclust <- makeCluster(detectCores() * 0.75)
+registerDoParallel(nclust)
+
+variable.indices <- 1 : 8
+all.comb <- expand.grid(as.data.frame(matrix(rep(0 : 1, length(variable.indices)), 
+                                             nrow = 2)))[-1, ]
+
+AUC.parallel <- foreach(i = 1 : nrep, .combine = "rbind", .packages = "boot") %:%
+foreach(j = 1 : nrow(all.comb), .combine = "c") %dopar%{
+set.seed(1)
+logistic.regression.model <- glm(as.formula(paste("INCOME_NONRESPONSE ~",
+paste(names(wtp.complete)[variable.indices[all.comb[j,] == 1]], collapse = " + "))), data
+= wtp.complete, family = "binomial")
+return(cv.glm(wtp.complete, logistic.regression.model, cost = area.under.curve, K =
+10)$delta[1])
+}
+
+stopCluster(nclust)
+```
+
+```{r}
+best.models.AUC <- (1 : nrow(all.comb))[apply(AUC.parallel, 2, mean) 
+                                        >= max(apply(AUC.parallel, 2, mean) 
+                                               - apply(AUC.parallel, 2, sd))]
+
+for(i in 1 : length(best.models.AUC)){
+cat(paste("Model ", i, ":\n"))
+print(names(wtp.complete)[variable.indices[all.comb[best.models.AUC[i], ] == 1]])
+print(apply(AUC.parallel, 2, mean)[best.models.AUC[i]])
+cat("\n")
+}
+```
+
+The cross-validation routine for selecting an optimal model yields the same results as all the other model selection criteria: forward selection, backward selection, AIC and BIC. The model: `INCOME_NONRESPONSE ~ HEAD + PAY_WATER + ELECTRIC` with an AUC of 0.61.   
